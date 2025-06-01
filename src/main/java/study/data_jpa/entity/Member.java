@@ -30,12 +30,16 @@ public class  Member {
         this.age = age;
         this.team = team;
     }
-
-
-
-    public void changeTeam(Team team) {
-        this.team = team;
-        team.getMembers().add(this);
+    public Member(String username) {
+        this.username = username;
     }
+    public void changeTeam(Team newteam) {
+        if(this.team != null) {
+            this.team.getMembers().remove(this); //기존 팀과의 관계제거(새로운팀으로)
+        }
+        this.team = newteam;
+        newteam.getMembers().add(this); //새로운 팀에 추가
+    }
+
 
 }
