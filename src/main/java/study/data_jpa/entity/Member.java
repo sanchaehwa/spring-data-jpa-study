@@ -9,6 +9,7 @@ import lombok.*;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @ToString(of = {"id","username","age"}) //Team을 포함하게되면 무한 순환(양방향연관관계) - Team 제외
 @Table(name="members")
+@NamedQuery(name= "Member.findByUsername", query = " select m from Member m where m.username = :username") //정적 쿼리, 컴파일 시점에 문법 오류를 잡을수있음.
 public class  Member {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -32,6 +33,10 @@ public class  Member {
     }
     public Member(String username) {
         this.username = username;
+    }
+    public Member(String username, int age) {
+        this.username = username;
+        this.age = age;
     }
     public void changeTeam(Team newteam) {
         if(this.team != null) {
