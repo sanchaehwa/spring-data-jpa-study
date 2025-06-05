@@ -88,6 +88,38 @@ class MemberJPARepositoryTest {
         Member findMember1 = result.get(0);
         assertThat(findMember1).isEqualTo(meber1);
     }
+    @Test
+    public void paging(){
+        //given
+        memberJPARepository.save(new Member("AAA",10));
+        memberJPARepository.save(new Member("BBB",10));
+        memberJPARepository.save(new Member("CCC",10));
+        memberJPARepository.save(new Member("DDD",10));
+        memberJPARepository.save(new Member("EEE",10));
+
+        int age = 10;
+        int offset = 1;
+        int limit = 3;
+
+        //when
+        List<Member>mebers = memberJPARepository.findByPage(age,offset,limit);
+        long totalCount = memberJPARepository.totalCount(age);
+
+        assertThat(mebers.size()).isEqualTo(3);
+        assertThat(totalCount).isEqualTo(5);
+
+    }
+    @Test
+    public void bulkUpdate() throws Exception{
+        memberJPARepository.save(new Member("AAA",10));
+        memberJPARepository.save(new Member("BBB",19));
+        memberJPARepository.save(new Member("CCC",20));
+        memberJPARepository.save(new Member("DDD",21));
+        memberJPARepository.save(new Member("EEE",40));
+
+        assertThat(memberJPARepository.bulkAgePlus(20)).isEqualTo(3);
+
+    }
 
 
 }
