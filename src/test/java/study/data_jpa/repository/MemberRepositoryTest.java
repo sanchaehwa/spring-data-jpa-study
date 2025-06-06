@@ -1,5 +1,7 @@
 package study.data_jpa.repository;
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,6 +30,9 @@ class MemberRepositoryTest {
     MemberRepository memberRepository;
     @Autowired
     TeamRepository teamRepository;
+    @PersistenceContext
+    EntityManager em;
+
 
     @Test
     public void testMember() {
@@ -177,5 +182,65 @@ class MemberRepositoryTest {
         memberRepository.save(new Member("member5", 40));
 
         assertThat(memberRepository.bulkAgePlus(20)).isEqualTo(3); //21
+    }
+    @Test
+    public void findMemberLazy(){
+        //given
+        //Member1 -> TeamA
+        //Member2 ->
+        Team teamA = new Team("TeamA");
+        Team teamB = new Team("TeamB");
+        teamRepository.save(teamA);
+        teamRepository.save(teamB);
+
+        Member member1 = new Member("member1", 10, teamA);
+        Member member2 = new Member("member2", 10, teamB);
+        memberRepository.save(member1);
+        memberRepository.save(member2);
+
+        em.flush(); //DB에 반영
+        em.clear(); //영속성 컨텍스트 초기화
+
+        //when
+        List<Member> members = memberRepository.findAll();
+        for (Member member : members) {
+            System.out.println(member);
+            System.out.println("member.getTeam().getClass() = " + member.getTeam().getClass());
+            System.out.println("member.getTeam().getName() = " + member.getTeam().getName()); //Lazy Loading으로 N+1 문제 발생
+        }
+        List<Member> findMember = memberRepository.findMemberFetchJoin();
+        for(Member member : findMember){
+            System.out.println("member.getTeam().getClass()" + member.getTeam().getClass());
+            System.out.println("member.getTeam().getName() = " + member.getTeam().getName());
+        }
+        List<Member> findMemberEntityGraph = memberRepository.findMemberEntityGraph();
+        for(Member member : findMemberEntityGraph){
+            System.out.println("member.getTeam().getClass()" + member.getTeam().getClass());
+            System.out.println("member.getTeam().getName() = " + member.getTeam().getName());
+        }
+
+    }
+    @Test
+    public void queryHint(){
+        Member member1 = new Member("member1", 10);
+        memberRepository.save(member1);
+        em.flush();
+        em.clear();
+
+        //when
+        Member findMember = memberRepository.findReadOnlyByUsername("member1");
+        findMember.setUsername("member2");
+
+        em.flush(); //변경 감지 DirtyChecking
+    }
+    @Test
+    public void lock(){
+        //given
+        Member member1 = new Member("member1", 10);
+        memberRepository.save(member1);
+        em.flush();
+        em.clear();
+
+        List<Member> result = memberRepository.findLockByUsername("member1");
     }
 }
