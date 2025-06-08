@@ -26,13 +26,9 @@ import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 @Rollback(false) // 테스트에서 수행한 DB 변경 사항이 커밋되어(성공하면) 실제 DB에 반영되도록 설정 (디버깅이나 확인 목적)로
 class MemberRepositoryTest {
     // 생성자주입
-    @Autowired
-    MemberRepository memberRepository;
-    @Autowired
-    TeamRepository teamRepository;
-    @PersistenceContext
-    EntityManager em;
-
+    @Autowired MemberRepository memberRepository;
+    @Autowired TeamRepository teamRepository;
+    @PersistenceContext EntityManager em;
 
     @Test
     public void testMember() {
@@ -242,5 +238,10 @@ class MemberRepositoryTest {
         em.clear();
 
         List<Member> result = memberRepository.findLockByUsername("member1");
+    }
+
+    @Test
+    public void callCustom(){
+        List<Member>result = memberRepository.findMemberCustom();
     }
 }
