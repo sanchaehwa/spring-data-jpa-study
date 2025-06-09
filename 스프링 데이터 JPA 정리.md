@@ -601,3 +601,185 @@ Member findReadOnly(@Param("id") Long id);
 | 목적 | 충돌 방지 | 충돌 감지 후 롤백 | 불필요한 감지 방지 |
 | 성능 | 낮음 (락 비용) | 높음 (락 없음) | 높음 (변경 감지 X) |
 | 충돌 발생 시 | 대기 or 차단 | 예외 발생 | 해당 |
+
+## 확장 기능
+
+### 사용자 정의 Repository 구현
+
+- 스프링 데이터 JPA Repository 는 Interface만 정의하고 구현체는 스프링이 자동 생성
+
+```java
+public interface UserRepository extends JpaRepository<User,Long>{
+		User findByUsername(String username);
+}
+/*
+- UserRepository는 JPA Repository를 상속하고 있으므로, Spring은 내부적으로 프록시 객체를 
+만들어서 FindByUsername을 처리할 수 있는 구현체를 자동 생성해줌. 
+- 스프링 부팅 시점에 @EnableJpaRepository를 통해 Repositroy 인터페이스들을 스캔
+- 각 인터페이스에 대해 JDK 동적 프록시 혹은 CGLB 프록시를 사용해 적절한 쿼리를 생성해서 동작하는 클래스
+를 자동 만들어주면
+- Service Layer에서도 User user = userRepository.findByUsername("chris");
+동작하는것
+=> 인터페이스 만 만들면, 스프링에서 자동 생성
+*/
+
+```
+
+- 스프링 데이터 JPA가 제공하는 인터페이스를 직접 구현하면 구현해야하는 기능이 너무 많음
+    - JpaRepository에 있는 수많은 기능(예: save, delete, findAll 등)을 **전부 직접 구현해야함.**
+- 인터페이스 매서드를 직접 구현하고자 한다면
+    - JPA 직접 사용(Entity Manager)
+    - 스프링 JDBC Template 사용
+    - MyBatis 사용
+    - 데이터베이스 커넥션 직접 사용
+    - QueryDSL 사용
+
+### 도메인 클래스 컨버터
+
+**`@PostConstruct`** 
+
+- Spring Bean이 생성된 직후(의존성 주입까지 완료된 후) 자동으로 호출되는 초기화 매서드를 지정할때 사용하는것
+- Return  값이 없어야하며, 파라미터가 없어야함. static 매서드에 붙이면 안됨. 클래스가 SpringBoot여야함.
+- 외부 API 연결 초기화 / 설정 값 검증 / 의존성 객체를 활용한 로직 수행에서 쓰임.
+
+```java
+@PostConstruct
+public void init() {
+    memberRepository.save(new Member("userA"));
+}
+//서버가 처음 켜질때, userA라는 사용자가 DB에 미리 저장이 됨
+```
+
+**도메인 클래스 컨버터**
+
+- SpringMVC는 @PathVariable , @RequestParam 등으로 전달받은 값을 해당 엔티티로 자동 변환해주는 기능을 제공하는데, 이 기능이 도메인 클래스 컨버터.
+1. /members2/{id}에서 {id}는 문자열이나 숫자(Long 등)로 전달
+2. Spring은 해당 ID 값을 기반으로 Member 엔티티를 DB에서 조회하려고 시도.
+3. 이때 Spring Data JPA가 내부적으로 JpaRepository의 findById()를 자동 호출해서 Member 객체로 바인딩해줌.
+
+### **도메인 클래스 컨버터의 한계**
+
+- 컨트롤러 레이어에서만 사용 가능 (Service, Repository 레이어에서는 비추)
+- ID로 DB에서 조회하는 단순 케이스에만 적합
+- 복잡한 로직이 들어갈 경우 명시적으로 findById() 호출하는 것이 좋음
+
+### 페이징과 정렬
+
+- 페이징을 바탕으로 한 데이터 조회에 대한 요청은 PageRequest 라는 클래스로 치환하여 기능을 구현할 수 있음. Pageable 인터페이스를 구현할 구체 클래스 = PageRequest
+- 컨트롤러 메서드에서 `Pageable pageable`을 선언하면, **Spring이 자동으로** PageRequest 객체를 생성해서 이 pageable에 **주입(Injection)**
+- 이 클래스를 사용하면 DB에서 가져올 데이터의 일부를 특정 페이지로 제한하고,필요에 따라 정렬옵션을 지정할 수 있음
+    - 페이징은 사용자가 어떤 데이터를 요청했을 때, 전체 데이터 중 원하는 정렬 옵션에 따라 제공하는 방식
+
+### @PageableDefault
+
+- 클라이언트가 page, size(데이터개수) 혹은 sort(정렬기준) 정보를 쿼리 스트링(입력데이터)로 넘겨주지않으면, 한 페이지에 20개의 사이즈로 분리된 페이지 중 첫 페이지를 반환
+
+```java
+public abstract class PageableHandlerMethodArgumentResolverSupport {
+
+    private static final String INVALID_DEFAULT_PAGE_SIZE = "Invalid default page size";
+
+    **private static final String DEFAULT_PAGE_PARAMETER = "page";
+    private static final String DEFAULT_SIZE_PARAMETER = "size";
+    private static final String DEFAULT_PREFIX = "";
+    private static final String DEFAULT_QUALIFIER_DELIMITER = "_";
+    private static final int DEFAULT_MAX_PAGE_SIZE = 2000;**
+
+    static final Pageable DEFAULT_PAGE_REQUEST = PageRequest.of(0, 20);
+
+    **private Pageable fallbackPageable = DEFAULT_PAGE_REQUEST;**
+    private String pageParameterName = DEFAULT_PAGE_PARAMETER;
+    private String sizeParameterName = DEFAULT_SIZE_PARAMETER;
+    private String prefix = DEFAULT_PREFIX;
+    private String qualifierDelimiter = DEFAULT_QUALIFIER_DELIMITER;
+    private int maxPageSize = DEFAULT_MAX_PAGE_SIZE;
+}
+```
+
+- `@PageableDefault` 어노테이션은 기본 페이징 및 정렬 옵션을 정하는데 사용되는데, 해당 어노테이션을 사용하며 별다른 옵션을 설정하지 않을 시 위 `fallbackPageable` 옵션이 사용
+- Default 옵션을 사용하지 않고, 커스텀하면
+
+```java
+@GetMapping("/reviews")
+public ResponseEntity<ReviewPageResponseDTO> memberReviews(
+				**@PageableDefault(
+				page = 0, size = 10, sort = "id", direction = Sort.Direction.DESC) 
+				Pageable pageable)** {
+		Page<Review> reviews = memberService.getReviews(pageable);
+		ReviewPageResponseDTO response = ReviewConverter.toReviewPageResponse(reviews);
+		return ResponseEntity.ok(response);
+	}
+}
+```
+
+- DefaultPage의 경우 개발자가 정한 기본 Page의 형식이다. 기타 설정을 해주지 않으면 `FallbackPage` 의 설정으로 실행된다. `Fallback` 의 경우, 적합한 방식이 없을 때, 만일을 대비해 만들어둔 설정. DefaultPage는 `@PageableDefault` 어노테이션을 통해 설정함.
+
+### (페이징) 요청 파라미터
+
+```java
+/members?page=0&size=3&sort=id,desc&sort=username,desc
+```
+
+- Page : 현재 페이지 (0부터 시작)
+- Size : 한 페이지에 노출할 데이터 건수
+- Sort : 정렬 조건 (ASC | DESC), 정렬 방향을 변경하고 싶으면 `sort`  파라미터 추가 (`asc` 생략 가능 * 기본값이기때문에)
+
+## 스프링 데이터 JPA 구현체 분석
+
+스프링 데이터 JPA가 제공하는 공통 인터페이스의 구현체
+`org.springframework.data.jpa.repository.support.SimpleJpaRepository`
+
+```java
+@Repository
+@Transactional(
+    readOnly = true ) //조회
+    
+//스프링 빈의 컴포넌트 스캔 대상이 되는것 - 스프링이 읽어드려가지고 스프링 컨테이너에 올림
+//JPA , JDBC는 예외가 틀린데, 이걸 스프링에서 쓸수있는 예외로 바뀌어서 올라감 - Repository 
+
+public class SimpleJpaRepository<T, ID> implements JpaRepositoryImplementation<T, ID> {
+    private static final String ID_MUST_NOT_BE_NULL = "The given id must not be null";
+    private static final String IDS_MUST_NOT_BE_NULL = "Ids must not be null";
+    private static final String ENTITY_MUST_NOT_BE_NULL = "Entity must not be null";
+    private static final String ENTITIES_MUST_NOT_BE_NULL = "Entities must not be null";
+    private static final String EXAMPLE_MUST_NOT_BE_NULL = "Example must not be null";
+    private static final String SPECIFICATION_MUST_NOT_BE_NULL = "Specification must not be null";
+    private static final String QUERY_FUNCTION_MUST_NOT_BE_NULL = "Query function must not be null";
+    private final JpaEntityInformation<T, ?> entityInformation;
+    private final EntityManager entityManager;
+    private final PersistenceProvider provider;
+    @Nullable
+    private CrudMethodMetadata metadata;
+    @Nullable
+    private ProjectionFactory projectionFactory;
+    private EscapeCharacter escapeCharacter;
+
+    @Transactional //memberRepository.save() 하면 호출됨 - 매서드 레벨에서 @Transaction 을 걸면 이거 먼저 인정이 됨
+    public <S extends T> S save(S entity) {
+        Assert.notNull(entity, "Entity must not be null");
+        if (this.entityInformation.isNew(entity)) {
+            this.entityManager.persist(entity); //새로운 엔티티면 저장
+            return entity;
+        } else {
+            return (S)this.entityManager.merge(entity); //새로운 엔티티가 아니면 병합
+        }
+    }
+```
+
+`@Repository` 적용: JPA 예외를 스프링이 추상화한 예외로 변환
+
+`@Transactional` 트랜잭션 적용
+
+- JPA의 모든 변경은 트랜잭션 안에서 동작
+- 스프링 데이터 JPA는 변경(등록, 수정, 삭제) 메서드를 트랜잭션 처리
+- 서비스 계층에서 트랜잭션을 시작하지 않으면 리파지토리에서 트랜잭션 시작
+- 서비스 계층에서 트랜잭션을 시작하면 리파지토리는 해당 트랜잭션을 전파 받아서 사용
+- 그래서 스프링 데이터 JPA를 사용할 때 트랜잭션이 없어도 데이터 등록, 변경이 가능했음(사실은 트랜잭션
+이 리포지토리 계층에 걸려있는 것임)
+
+`@Transactional(readOnly = true)`
+
+- 데이터를 단순히 조회만 하고 변경하지 않는 트랜잭션에서 `readOnly = true` 옵션을 사용하면 플러시
+를 생략해서 약간의 성능 향상을 얻을 수 있음
+
+**  Merge는, **“변경된 필드만” 업데이트**하는 게 아니라 **“모든 필드”를 복사**해서 갱신하는것
