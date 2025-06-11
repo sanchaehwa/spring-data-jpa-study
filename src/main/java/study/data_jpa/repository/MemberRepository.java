@@ -2,6 +2,7 @@ package study.data_jpa.repository;
 
 import jakarta.persistence.LockModeType;
 import jakarta.persistence.QueryHint;
+import org.apache.catalina.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.*;
@@ -17,6 +18,7 @@ import java.util.Optional;
 
 public interface MemberRepository extends JpaRepository<Member, Long>,MemberRepositoryCustom,JpaSpecificationExecutor<Member> {
     List<Member> findByUsernameAndAgeGreaterThan(String username, int age);
+
     //@NamedQuery 가 없으면, 매서드 이름으로 쿼리 생성하는 부분으로 실행이 됨.
     List<Member> findByUsername(@Param("username") String username);
 
@@ -30,7 +32,7 @@ public interface MemberRepository extends JpaRepository<Member, Long>,MemberRepo
 
     //DTO로 조회
     @Query("select new study.data_jpa.dto.MemberDto (m.id, m.username, t.name ) from Member m join m.team t")
-    List<MemberDto> findMemberDTO( );
+    List<MemberDto> findMemberDTO();
 
     //컬렉션 파라미터 바인딩
     @Query("select m from Member m where m.username in  :names")
@@ -40,7 +42,7 @@ public interface MemberRepository extends JpaRepository<Member, Long>,MemberRepo
 
     Member findMemberByUsername(String username); //단건
 
-    Optional<Member>findOptionalByUsername(String username); //단건 (값이 있는 경우, 없는경우 NPE 방지)
+    Optional<Member> findOptionalByUsername(String username); //단건 (값이 있는 경우, 없는경우 NPE 방지)
 
     @Query(value = "select m from Member m left join m.team t",
             countQuery = "select count(m.username) from Member m")
@@ -69,4 +71,16 @@ public interface MemberRepository extends JpaRepository<Member, Long>,MemberRepo
     //Lock
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     List<Member> findLockByUsername(String username);
+
+    <T> List<T> findProjectionsByUsername(@Param("username") String username, Class<T> type);
+
+    @Query(value = "select * from member where username = ?", nativeQuery = true)
+    Member findByNativeQuery(String username);
+
+    //Projections 활용 , 네이티브 쿼리 + 인터페이스 기반 Projections 활용
+    @Query(value = "SELECT m.member_id as id, m.username, t.name as teamName " +
+            "FROM member m left join team t ON m.team_id = t.team_id",
+            countQuery = "SELECT count(*) from member",
+            nativeQuery = true)
+    Page<MemberProjection> findByNativeProjection(Pageable pageable);
 }

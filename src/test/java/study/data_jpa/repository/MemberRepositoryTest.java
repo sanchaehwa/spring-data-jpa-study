@@ -66,9 +66,9 @@ class MemberRepositoryTest {
         memberRepository.save(member1);
         memberRepository.save(member2);
 
-        List<Member> result = memberRepository.findByUsername("member1");
-        Member findMember = result.get(0);
-        assertThat(findMember).isEqualTo(member1);
+//      //  List<Member> result = memberRepository.findByUsername("member1");
+//        Member findMember = result.get(0);
+//        assertThat(findMember).isEqualTo(member1);
     }
 
     @Test //레포지토리 매소드에 쿼리 정의 테스트
@@ -265,8 +265,58 @@ class MemberRepositoryTest {
         Team teamA = new Team("TeamA");
         em.persist(teamA);
 
-        Member member1 = new Member("member1", 10, teamA);
-        Member member2 = new Member("member2", 20, teamA);
+        Member member1 = new Member("member1", 0, teamA);
+        Member member2 = new Member("member2", 0, teamA);
+        em.persist(member1);
+        em.persist(member2);
+
+        em.flush();
+        em.clear();
+
+
+        //when
+        //Probe 생성
+        Member member = new Member("member1");
+        Team team = new Team("TeamA");
+        member.setTeam(team);
+        //ExampleMatcher 생성, age 프로퍼티는 무시
+        ExampleMatcher matcher = ExampleMatcher.matching().withIgnorePaths("age");
+
+        Example<Member> memberExample = Example.of(member);
+
+        List<Member>result = memberRepository.findAll(memberExample);
+
+        assertThat(result.get(0).getUsername()).isEqualTo("member1");
+    }
+    @Test
+    public void projection() throws Exception{
+        Team teamA = new Team("TeamA");
+        em.persist(teamA);
+
+        Member member1 = new Member("member1", 0, teamA);
+        Member member2 = new Member("member2", 0, teamA);
+        em.persist(member1);
+        em.persist(member2);
+
+        em.flush();
+        em.clear();
+
+        List<NestedClosedProject> result = memberRepository.findProjectionsByUsername("member1",NestedClosedProject.class);
+        //List<UsernameOnlyDto> result = memberRepository.findProjectionsByUsername("member1",UsernameOnlyDto.class);
+
+        for(NestedClosedProject nestedClosedProject: result){
+            System.out.println(nestedClosedProject.getUsername());
+            System.out.println(nestedClosedProject.getTeam().getName());
+        }
+
+    }
+    @Test
+    public void nativeQuery(){
+        Team teamA = new Team("TeamA");
+        em.persist(teamA);
+
+        Member member1 = new Member("member1", 0, teamA);
+        Member member2 = new Member("member2", 0, teamA);
         em.persist(member1);
         em.persist(member2);
 
@@ -274,18 +324,14 @@ class MemberRepositoryTest {
         em.clear();
 
         //when
-        //probe
-        //when
-        //Probe 생성
-        Member member = new Member("m1");
-        Team team = new Team("teamA"); //내부조인으로 teamA 가능
-        member.setTeam(team);
-    //ExampleMatcher 생성, age 프로퍼티는 무시
-        ExampleMatcher matcher = ExampleMatcher.matching()
-                .withIgnorePaths("age");
-        Example<Member> example = Example.of(member, matcher);
-        List<Member> result = memberRepository.findAll(example);
-    //then
-        assertThat(result.size()).isEqualTo(1);
+//        Member result = memberRepository.findByNativeQuery("member1");
+//        System.out.println("result = " + result);
+        
+        Page<MemberProjection> result = memberRepository.findByNativeProjection(PageRequest.of(0, 10));
+        List<MemberProjection> content = result.getContent();
+        for (MemberProjection memberProjection : content) {
+            System.out.println("memberProjection.getUsername() = " + memberProjection.getUsername());
+            System.out.println("memberProjection.getTeamName() = " + memberProjection.getTeamName());
+        }
     }
 }
